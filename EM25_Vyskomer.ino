@@ -1,75 +1,54 @@
-// Load Wi-Fi library
+// Libraries stuff
 #include <WiFi.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
 #include <Wire.h>
 
-// Replace with your network credentials
-const char* ssid     = "ESP32-Access-Point";
-const char* password = "123456789";
-#define SEALEVELPRESSURE_HPA (1013.25)
-
-// Set web server port number to 80
+//Webserver stuff
+const char* ssid     = "-EM Flight Computer 1-";
 WiFiServer server(80);
-
-// Variable to store the HTTP request
-String header;
 char currentLine[128] = {0};  // Zero-init to start empty
 int pos = 0;                  // Position in buffer
 bool firstLine = true;  // Process only the first line
-long BMP_AvgTemperature;
-long BMP_AvgPressure;
-long BMP_RawAltitude;
 
-const uint8_t LOOKBACK   = 5;   // how many points must be lower than the peak
-float altBuffer[LOOKBACK + 1];
-uint8_t bufIdx = 0;          // points to the *oldest* entry
-bool bufferFull = false;
 
-long BMP_Temperature;
-long BMP_Pressure;
-long BMP_Altitude;
-long BMP_Correction;
-long BMP_DefaultPressure;
-long BMP_PastAltitude;
-int BMP_Counter;
-long BMP_SmoothAltitude;
-int FlightCount = 1;
-int AltitudeCurrent;
-int Altitude;
+
+
+//Simulace stuff
+int i=5; 
+bool ascent = true;
+//Altitude stuff
+float BMP_Correction;
+float BMP_DefaultPressure;
+float BMP_RawAltitude;
+float BMP_PastAltitude;
+float BMP_SmoothAltitude;
+float SmoothFactor = 0.4; //data exponential smoothing
+uint8_t BMP_Counter;
+bool MaxAlt = false;
+
+const int BUTTON_PIN = 14;
 bool GoTo;
 bool PastGoTo;
 bool Press;
-int i= 5;
-bool ascent = true;
-bool PastPress = false;
-long Presstime;
-bool MaxAlt = false;
-Adafruit_BME280 bme; // I2C
-float SmoothFactor = 0.4;
-float apogeeAltitude = 0.0;
-float BMP_MaxAltitude = 0;
-int presscount = 0;
+
+//Altitude buffer stuff
 int flightnum = 0;
 char StringMaxAltitude[5][10];
 float MaxAltitudeBuffer[5];
-char poradi[3];
+char poradi[2];
 
 void setup() {
   Serial.begin(115200);
-  // Initialize the output variables as outputs
 
-  // Connect to Wi-Fi network with SSID and password
-  Serial.print("Setting AP (Access Point)…");
-  // Remove the password parameter, if you want the AP (Access Point) to be open
-  WiFi.softAP(ssid, password);
+
+  Serial.print("Setting AP");
+  WiFi.softAP(ssid);
 
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
   server.begin();
-  bme.begin();
-  pinMode(14, INPUT_PULLUP);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
 
 }
@@ -77,12 +56,11 @@ void setup() {
 
 void loop() {
   //----------------------------------------------LOOP------------------------------
- Press = digitalRead(14);
+ Press = digitalRead(BUTTON_PIN);
   if(Press == 0){
     BMP_sim();
     DataSmooth(BMP_RawAltitude);
     Max_Alt();
-    Presstime = millis();
   }
 
   if(GoTo == 1){
@@ -90,19 +68,19 @@ void loop() {
     if(GoTo != PastGoTo){
       Serial.println("Ready for next Launch");
 
-      BMP_MaxAltitude = 0;
-      BMP_SmoothAltitude = 0;
-      BMP_PastAltitude = 0;
-      BMP_RawAltitude = 0;
-      ascent = true;
-      MaxAlt = false;
-      flightnum++;
-      if(flightnum>5){
-        flightnum = 5;
-        
-      }
-      i=4;
 
+      if(flightnum<5){
+        BMP_SmoothAltitude = 0;
+        BMP_PastAltitude = 0;
+        BMP_RawAltitude = 0;
+        ascent = true;
+        MaxAlt = false;
+        flightnum++;
+      }
+      else{
+        flightnum = 5;
+      }
+      i=4; //simulation, delete later
     }
     Serial.println("Measuring..");
     BMP_sim();
@@ -111,7 +89,6 @@ void loop() {
     Max_Alt();
   }
   else{
-
   }
   PastGoTo = GoTo;
 
@@ -121,9 +98,6 @@ void loop() {
   WiFiClient client = server.available();
 
   if (client) {
-    Serial.println("New Client.");
-
-    // Reset state
     currentLine[0] = '\0';
     pos = 0;
     firstLine = true;
@@ -169,33 +143,36 @@ void loop() {
     client.println("<!DOCTYPE html><html>");
     client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
     client.println("<link rel=\"icon\" href=\"data:,\">");
-    client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+    client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center; background-color: #F7F0DA; color: black;}");
       client.println("a { text-decoration: none; font-size: 30px; margin: 10px; padding: 10px 20px; cursor: pointer; }");
-      client.println(".on { background-color: #4CAF50; color: white; }");
-      client.println(".off { background-color: #f44336; color: white; }");
-    client.println("</style></head>");
+      client.println(".on { background-color: #f44336; color: white; }");
+      client.println(".off { background-color: #4CAF50; color: white; }");
 
+    client.println("</style></head>");
+    client.println("<body>");
+    //client.println("<div style=\"position:fixed; top:0; left:0; width:100%; height:100%; ");
+    //client.println("");
+    //client.println("z-index:-1;\"></div>");
+
+    //client.println("<img src=\"      \" style=\"width:100px; margin:20px auto; display:block;\">")
 
     for(int e = 0; e < flightnum; e++){
       client.println("<h1>");
       client.println("Flight ");
-      itoa(flightnum, poradi, 10);
+      itoa(e+1, poradi, 10);
       client.println(poradi); //placeholder
       client.println(" Max Altitude: ");
       if(MaxAltitudeBuffer[e] == 0.00){
         client.println("N/A");
       }
-
       else{
         dtostrf(MaxAltitudeBuffer[e], 6, 2, StringMaxAltitude[e]);        
         client.println(StringMaxAltitude[e]);
-
       }
       client.println("m");
       client.println("</h1>");
     }
    
-
 //-------------------------------------BUTTON----------------------------
     client.println("</p>");
     client.print("<a href=\"/");
@@ -203,7 +180,7 @@ void loop() {
     client.print("\" class=\"");
     client.print(GoTo ? "on" : "off");     // toggle style
     client.print("\">");
-    client.print(GoTo ? "ON" : "OFF");     // toggle text
+    client.print(GoTo ? "Finish Measuring" : "Go For Launch");     // toggle text
     client.println("</a>");
 
     client.println("</body></html>");
@@ -273,11 +250,11 @@ void Max_Alt(){
     Serial.println("ALTITUDE MAX REACHED_____________");
     //Serial.println(BMP_SmoothAltitude);
     MaxAlt = true;
-    BMP_MaxAltitude = BMP_SmoothAltitude;
+    BMP_SmoothAltitude;
     //ULOZENI MAX ALTITUDE, je potreba to lehce postelovat aby bylo ukladani tech jednotlivejch altitud fukcni, ale to musim prvni implementovat buttony
     Serial.print("Flight number: ");
     Serial.println(flightnum-1);
-    MaxAltitudeBuffer[flightnum-1] = BMP_MaxAltitude;
+    MaxAltitudeBuffer[flightnum-1] = BMP_SmoothAltitude;
     Serial.println(MaxAltitudeBuffer[flightnum-1]);
   }
 
