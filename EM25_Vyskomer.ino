@@ -7,8 +7,10 @@ const char* ssid = " - EM Flight Computer 1 - "; //Jmeno letoveho pocitace ve Wi
 const int BUTTON_PIN = 14; //Pin buttonu, ale momentalne ten button nic nedela
 const float BMP_DefaultPressure = 1013; //POTREBA VZDY ZMENIT ten den kdy se startuje!!!!!!!
 const int FlightAmount = 7; //max mnozstvi letu co je schopny zaznamenat
-
-
+const uint8_t MaxAltSensitivity = 10; //kolik readingu za sebou musi klesat aby detekoval klesani - pokud jich je moc malo muze dochazet k falesnym detekovanim - vyladit s irl sensorem.
+const float SmoothFactor = 0.4;  //data exponential smoothing - jak moc velkou vahu ma predchozi mereni v smoothovani sumu soucasneho
+const char BackgroundColor[8] = "#F7F0DA";
+const char TextColor[8] = "#291C24";
 
 
 
@@ -35,7 +37,6 @@ float BMP_RawPressure;//pro jistotku, not sure jestli ten tlak taky nepotrebuje 
 float BMP_RawAltitude;
 float BMP_PastAltitude;
 float BMP_SmoothAltitude;
-float SmoothFactor = 0.4;  //data exponential smoothing
 uint8_t BMP_Counter;
 bool MaxAlt = false;
 
@@ -161,7 +162,11 @@ void loop() {
     client.println("<!DOCTYPE html><html>");
     client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
     client.println("<link rel=\"icon\" href=\"data:,\">");
-    client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center; background-color: #F7F0DA; color: #291C24;}");
+    client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center; background-color:");
+    client.println(BackgroundColor);
+    client.println("; color:");
+    client.println(TextColor);
+    client.println(";}");
     client.println("a { text-decoration: none; font-size: 30px; margin: 10px; padding: 10px 20px; cursor: pointer; }");
     client.println(".on { background-color: #f44336; color: white; }");
     client.println(".off { background-color: #4CAF50; color: white; }");
@@ -172,7 +177,8 @@ void loop() {
 
     client.println("<p> </p>");
 
-    client.println("<h2>EXPEDICE MARS</h2>");
+    client.println("<h2>EXPEDICE MARS Flight Computer</h2>");
+
     client.println("<p>Kdyz zmacknes Go For Launch, zacne merit maximalni vysku.</p>");
     client.println("<p> Tlacitko Finish Measuring zmackni az po pristani rakety, ukonci mereni vysky daneho letu a pripravi pocitac na dalsi let!</p>");
 
@@ -262,7 +268,7 @@ void Max_Alt() {
     BMP_Counter = 0;
   }
 
-  if (BMP_Counter > 5 && MaxAlt == false) {  //Zvysit na 20!!!!!
+  if (BMP_Counter > MaxAltSensitivity && MaxAlt == false) {  //Zvysit na 20!!!!!
     BMP_Counter = 0;
     //Altitude = BMP_SmoothAltitude;
     Serial.println("ALTITUDE MAX REACHED_____________");
