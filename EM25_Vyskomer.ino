@@ -11,7 +11,7 @@ const uint8_t MaxAltSensitivity = 10; //kolik readingu za sebou musi klesat aby 
 const float SmoothFactor = 0.4;  //data exponential smoothing - jak moc velkou vahu ma predchozi mereni v smoothovani sumu soucasneho
 const char BackgroundColor[8] = "#F7F0DA";
 const char TextColor[8] = "#291C24";
-
+const int BMP_Refresh = 50; //delay od posledniho mereni. nedavat moc velky jinak rozjebe html.
 
 
 //Webserver stuff
@@ -22,12 +22,6 @@ int pos = 0;                    // Position in buffer
 bool firstLine = true;          // Process only the first line
 
 BMP580 bmp;  // Vytvorení objektu BMP580
-
-
-//Simulace stuff
-int i = 5;
-bool ascent = true;
-
 
 
 //Altitude stuff
@@ -76,8 +70,8 @@ void loop() {
   //----------------------------------------------LOOP------------------------------
   Press = digitalRead(BUTTON_PIN);
   if (Press == 0) {
-    BMP_sim();
-    //BMP(); //na finalni verzi nahradit BMP_sim BMP.
+    
+    BMP(); 
 
     DataSmooth(BMP_RawAltitude);
     Max_Alt();
@@ -93,17 +87,16 @@ void loop() {
         BMP_SmoothAltitude = 0;
         BMP_PastAltitude = 0;
         BMP_RawAltitude = 0;
-        ascent = true;
         MaxAlt = false;
         flightnum++;
       } else {
         flightnum = FlightAmount;
       }
-      i = 4;  //simulation, delete later
+    
     }
     Serial.println("Measuring..");
-    BMP_sim();
-    //BMP(); //na finalni verzi nahradit BMP_sim BMP.
+    
+    BMP(); 
     DataSmooth(BMP_RawAltitude);
     Serial.println(BMP_SmoothAltitude);
     Max_Alt();
@@ -226,38 +219,9 @@ void DataSmooth(float Raw) {
 void BMP() {
   BMP_RawPressure = bmp.readPressure();
   BMP_RawAltitude =bmp.readAltitude(BMP_DefaultPressure);
-
-
-
-
+  delay(BMP_Refresh);
 }
-void BMP_sim() {  //{--------------------------------------------------BMP-----------------------------------
-  BMP_PastAltitude = BMP_SmoothAltitude;
-  int x = random(100, 200);
-  BMP_RawAltitude = 0;
-  if ((i < x) && (ascent == true)) {
-    i = i + random(1, 5) + random(-5, 5);
-    ////Serial.println("Plus");
-  }
 
-  else if (i >= x) {
-    ascent = false;
-    i = i - random(1, 5) + random(-5, 2);
-
-    //Serial.print("Minus: ");
-    //Serial.println(i);
-  }
-
-  else if (ascent == false && i > 0) {
-    i = i - random(1, 5) + random(-5, 2);
-    //Serial.print("Descent: ");
-    //Serial.println(i);
-  }
-
-  BMP_RawAltitude = i;
-
-  delay(50);
-}
 //--------------------------------------------------------------MAX_ALT-DETECTION----------------------------
 void Max_Alt() {
   if (BMP_SmoothAltitude < BMP_PastAltitude) {
